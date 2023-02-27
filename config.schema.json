@@ -1,0 +1,31 @@
+{
+  "pluginAlias": "SunsynkHomebridgePlugin",
+  "pluginType": "platform",
+  "singular": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "required": true,
+        "default": "PlantName in homekit"
+      },
+      "plantId": {
+          "title": "PlantId from APP",
+          "type": "string",
+          "required": true
+      },
+      "username": {
+          "title": "username",
+          "type": "string",
+          "required": true
+      },
+      "password": {
+          "title": "password",
+          "type": "string",
+          "required": true
+      }
+    }
+  }
+}
