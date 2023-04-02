@@ -8,8 +8,11 @@ const settings_1 = require("./settings");
 const KwMeterAccessory_1 = require("./KwMeterAccessory");
 const node_fetch_1 = __importDefault(require("node-fetch"));
 const fs_1 = require("fs");
-const convert_svg_to_jpeg_1 = require("convert-svg-to-jpeg");
+const svg2img_1 = __importDefault(require("svg2img"));
 const eskom_loadshedding_api_1 = require("eskom-loadshedding-api");
+const modbus_serial_1 = __importDefault(require("modbus-serial"));
+const loginUrl = "https://pv.inteless.com/oauth/token";
+const plantIdEndpoint = "https://pv.inteless.com/api/v1/plants?page=1&limit=10&name=&status=";
 const sunsynkModBusAddr = {
     overall_state: 59,
     soc: 184,
@@ -22,8 +25,31 @@ const sunsynkModBusAddr = {
     load_total: 175,
     solar_load: 186,
 };
-const loginUrl = "https://pv.inteless.com/oauth/token";
-const plantIdEndpoint = "https://pv.inteless.com/api/v1/plants?page=1&limit=10&name=&status=";
+async function fetchRSData() {
+    let res = {};
+    const inverter = new modbus_serial_1.default();
+    await inverter.connectRTUBuffered("/dev/ttyUSB0", { baudRate: 9600 });
+    console.log('inverter', Object.keys(inverter), inverter.getID(), inverter.getTimeout());
+    inverter.readHoldingRegisters(172, 1)
+        .then((res) => {
+        console.log('Read=172-1 =>', res);
+    })
+        .catch((err) => {
+        console.log('Read Error=172-1 =>', err);
+    });
+    let addresses = Object.keys(sunsynkModBusAddr);
+    for (let index = 0; index < addresses.length; index++) {
+        const item = addresses[index];
+        console.log('Read', item, 'register:', sunsynkModBusAddr[item]);
+        res[item] = await inverter.readHoldingRegisters(sunsynkModBusAddr[item], 1);
+        console.log('Read', res[item]);
+    }
+    ;
+    inverter.close((status) => {
+        console.log('Disconnected from inverter');
+    });
+    return res;
+}
 async function fetchUserData(username, password) {
     var raw = JSON.stringify({
         username,
@@ -109,6 +135,8 @@ class SunsynkHomebridgePlatform {
      */
     async discoverDevices(username, password, plantId) {
         const userData = await fetchUserData(username, password);
+        const rsData = await fetchRSData();
+        console.log('rsData', rsData);
         //Search.searchSuburbs('Constantia Kloof').then((results: SearchSuburb[]) => console.log('Searching for "Constantia Kloof":', results));
         // const status = await Status.getStatus();
         // console.log('Current status: ', status)
@@ -205,6 +233,7 @@ class SunsynkHomebridgePlatform {
             // });
             const loop = async () => {
                 const flowData = await fetchFlowData(userData, plantId);
+                // const rsData = await fetchRSData()
                 let res = {};
                 // let addresses = Object.keys(sunsynkModBusAddr);
                 // for (let index = 0; index < addresses.length; index++) {
@@ -277,7 +306,7 @@ async function writePowerFlowSvg(data) {
     if (status > 0) {
         const sub = await eskom_loadshedding_api_1.Search.searchSuburbs('Constantia Kloof', 1);
         const { schedule } = await eskom_loadshedding_api_1.Schedule.getSchedule(sub[0].id, status);
-        console.log('ls', schedule);
+        //console.log('ls',schedule)
         for (let i = 0; i < schedule.length; i++) {
             const slot = schedule[i];
             if (schedule[i + 1]) {
@@ -358,7 +387,10 @@ async function writePowerFlowSvg(data) {
   `;
     (0, fs_1.writeFile)('sunsynk-info.svg', svg, () => {
         //console.log('wrote animation file ',process.cwd()+'/sunsynk-info.svg')
-        (0, convert_svg_to_jpeg_1.convertFile)('sunsynk-info.svg');
+        (0, svg2img_1.default)(svg, (err, buffer) => {
+            console.log('error converting to png', err);
+            (0, fs_1.writeFile)('sunsynk-info.png', buffer, () => { });
+        });
     });
 }
 //# sourceMappingURL=platform.js.map
